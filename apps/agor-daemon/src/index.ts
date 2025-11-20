@@ -804,34 +804,7 @@ async function main() {
   const usersService = createUsersService(db);
   app.use('/users', usersService);
 
-  /**
-   * Helper function to authenticate JWT tokens in custom Feathers service handlers
-   * Call this at the start of any custom service method that requires authentication
-   */
-  async function authenticateParams(params: RouteParams): Promise<void> {
-    // Debug: log params structure
-    console.log('authenticateParams - params keys:', Object.keys(params));
-    console.log('authenticateParams - params.headers:', params.headers);
-
-    const authHeader = params.headers?.authorization || params.headers?.Authorization;
-
-    if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.substring(7);
-      try {
-        const payload = jwt.verify(token, jwtSecret) as { sub: string };
-        const user = await usersService.get(payload.sub);
-        params.user = user as User;
-      } catch (error) {
-        throw new NotAuthenticated('Invalid or expired token');
-      }
-    } else if (!allowAnonymous) {
-      throw new NotAuthenticated('Authentication required');
-    } else {
-      params.user = { user_id: 'anonymous', role: 'viewer' } as User;
-    }
-  }
-
-  // Register custom Feathers services with manual JWT authentication
+  // Register custom Feathers services with JWT authentication via hooks
   // These must be registered BEFORE the default service routes to override them
   const spawnService = {
     async create(data: Partial<import('@agor/core/types').SpawnConfig>, params: RouteParams) {
