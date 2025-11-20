@@ -708,67 +708,7 @@ async function main() {
   const sessionsService = createSessionsService(db, app) as unknown as SessionsServiceImpl;
   const messagesService = createMessagesService(db) as unknown as MessagesServiceImpl;
 
-  // Register custom Feathers services with manual JWT authentication
-  // These override the default Feathers routes to add JWT support
-  app.use('/sessions/:id/spawn', {
-    async create(data: Partial<import('@agor/core/types').SpawnConfig>, params: RouteParams) {
-      await authenticateParams(params);
-      const id = params.route?.id;
-      if (!id) throw new Error('Session ID required');
-
-      ensureMinimumRole(params, 'member', 'spawn sessions');
-      console.log(`🌱 Spawning session from: ${id.substring(0, 8)}`);
-      const spawnedSession = await sessionsService.spawn(id, data, params);
-      console.log(`✅ Spawn created: ${spawnedSession.session_id.substring(0, 8)}`);
-
-      if (app.io) {
-        app.io.emit('sessions created', spawnedSession);
-      }
-
-      return spawnedSession;
-    },
-  });
-
-  app.use('/sessions/:id/fork', {
-    async create(data: { prompt: string; task_id?: string }, params: RouteParams) {
-      await authenticateParams(params);
-      const id = params.route?.id;
-      if (!id) throw new Error('Session ID required');
-
-      ensureMinimumRole(params, 'member', 'fork sessions');
-      console.log(`🔀 Forking session: ${id.substring(0, 8)}`);
-      const forkedSession = await sessionsService.fork(id, data, params);
-      console.log(`✅ Fork created: ${forkedSession.session_id.substring(0, 8)}`);
-
-      if (app.io) {
-        app.io.emit('sessions created', forkedSession);
-      }
-
-      return forkedSession;
-    },
-  });
-
-  app.use('/sessions/:id/genealogy', {
-    async find(_data: unknown, params: RouteParams) {
-      await authenticateParams(params);
-      const id = params.route?.id;
-      if (!id) throw new Error('Session ID required');
-
-      ensureMinimumRole(params, 'member', 'view session genealogy');
-      return sessionsService.getGenealogy(id, params);
-    },
-    // biome-ignore lint/suspicious/noExplicitAny: FeathersJS route handler type mismatch
-  } as any);
-
-  app.use('/messages/bulk', {
-    async create(data: unknown, params: RouteParams) {
-      await authenticateParams(params);
-      ensureMinimumRole(params, 'member', 'create messages');
-      return messagesService.createMany(data as Message[]);
-    },
-  });
-
-  // Now register FeathersJS services
+  // Register FeathersJS services
   app.use('/sessions', sessionsService);
   app.use('/tasks', createTasksService(db, app));
   app.use('/leaderboard', createLeaderboardService(db));
@@ -862,6 +802,89 @@ async function main() {
   // Register users service (for authentication)
   const usersService = createUsersService(db);
   app.use('/users', usersService);
+
+  /**
+   * Helper function to authenticate JWT tokens in custom Feathers service handlers
+   * Call this at the start of any custom service method that requires authentication
+   */
+  async function authenticateParams(params: RouteParams): Promise<void> {
+    const authHeader = params.headers?.authorization || params.headers?.Authorization;
+
+    if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      try {
+        const payload = jwt.verify(token, jwtSecret) as { sub: string };
+        const user = await usersService.get(payload.sub);
+        params.user = user as User;
+      } catch (error) {
+        throw new NotAuthenticated('Invalid or expired token');
+      }
+    } else if (!allowAnonymous) {
+      throw new NotAuthenticated('Authentication required');
+    } else {
+      params.user = { user_id: 'anonymous', role: 'viewer' } as User;
+    }
+  }
+
+  // Register custom Feathers services with manual JWT authentication
+  // These must be registered BEFORE the default service routes to override them
+  app.use('/sessions/:id/spawn', {
+    async create(data: Partial<import('@agor/core/types').SpawnConfig>, params: RouteParams) {
+      await authenticateParams(params);
+      const id = params.route?.id;
+      if (!id) throw new Error('Session ID required');
+
+      ensureMinimumRole(params, 'member', 'spawn sessions');
+      console.log(`🌱 Spawning session from: ${id.substring(0, 8)}`);
+      const spawnedSession = await sessionsService.spawn(id, data, params);
+      console.log(`✅ Spawn created: ${spawnedSession.session_id.substring(0, 8)}`);
+
+      if (app.io) {
+        app.io.emit('sessions created', spawnedSession);
+      }
+
+      return spawnedSession;
+    },
+  });
+
+  app.use('/sessions/:id/fork', {
+    async create(data: { prompt: string; task_id?: string }, params: RouteParams) {
+      await authenticateParams(params);
+      const id = params.route?.id;
+      if (!id) throw new Error('Session ID required');
+
+      ensureMinimumRole(params, 'member', 'fork sessions');
+      console.log(`🔀 Forking session: ${id.substring(0, 8)}`);
+      const forkedSession = await sessionsService.fork(id, data, params);
+      console.log(`✅ Fork created: ${forkedSession.session_id.substring(0, 8)}`);
+
+      if (app.io) {
+        app.io.emit('sessions created', forkedSession);
+      }
+
+      return forkedSession;
+    },
+  });
+
+  app.use('/sessions/:id/genealogy', {
+    async find(_data: unknown, params: RouteParams) {
+      await authenticateParams(params);
+      const id = params.route?.id;
+      if (!id) throw new Error('Session ID required');
+
+      ensureMinimumRole(params, 'member', 'view session genealogy');
+      return sessionsService.getGenealogy(id, params);
+    },
+    // biome-ignore lint/suspicious/noExplicitAny: FeathersJS route handler type mismatch
+  } as any);
+
+  app.use('/messages/bulk', {
+    async create(data: unknown, params: RouteParams) {
+      await authenticateParams(params);
+      ensureMinimumRole(params, 'member', 'create messages');
+      return messagesService.createMany(data as Message[]);
+    },
+  });
 
   // Configure service hooks for authentication and authorization
   app.service('messages').hooks({
@@ -1700,29 +1723,6 @@ async function main() {
         console.log('✅ OpenCode server available at', openCodeServerUrl);
       }
     });
-  }
-
-  /**
-   * Helper function to authenticate JWT tokens in custom Feathers service handlers
-   * Call this at the start of any custom service method that requires authentication
-   */
-  async function authenticateParams(params: RouteParams): Promise<void> {
-    const authHeader = params.headers?.authorization || params.headers?.Authorization;
-
-    if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.substring(7);
-      try {
-        const payload = jwt.verify(token, jwtSecret) as { sub: string };
-        const user = await usersService.get(payload.sub);
-        params.user = user as User;
-      } catch (error) {
-        throw new NotAuthenticated('Invalid or expired token');
-      }
-    } else if (!allowAnonymous) {
-      throw new NotAuthenticated('Authentication required');
-    } else {
-      params.user = { user_id: 'anonymous', role: 'viewer' } as User;
-    }
   }
 
   /**
