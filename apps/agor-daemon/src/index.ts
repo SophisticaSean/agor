@@ -830,22 +830,7 @@ async function main() {
   console.log('📝 Adding hooks to /sessions/:id/spawn');
   app.service('/sessions/:id/spawn').hooks({
     before: {
-      create: [
-        (context) => {
-          console.log('🔍 [Spawn Hook] Before hook running');
-          console.log('🔍 [Spawn Hook] context.params.user:', context.params.user);
-          console.log('🔍 [Spawn Hook] context.params.authentication:', context.params.authentication);
-          console.log('🔍 [Spawn Hook] context.params.headers:', context.params.headers);
-          return context;
-        },
-        requireAuth,
-        (context) => {
-          console.log('🔍 [Spawn Hook] After requireAuth');
-          console.log('🔍 [Spawn Hook] context.params.user:', context.params.user);
-          return context;
-        },
-        requireMinimumRole('member', 'spawn sessions'),
-      ],
+      create: [requireAuth, requireMinimumRole('member', 'spawn sessions')],
     },
   });
   console.log('✅ /sessions/:id/spawn service registered with hooks');
