@@ -935,6 +935,11 @@ async function main() {
     },
   });
 
+  // Register /sessions service AFTER custom session endpoints to ensure route precedence
+  console.log('📝 Registering /sessions base service');
+  app.use('/sessions', sessionsService);
+  console.log('✅ /sessions base service registered');
+
   // Configure service hooks for authentication and authorization
   app.service('messages').hooks({
     before: {
@@ -3079,10 +3084,7 @@ async function main() {
     // biome-ignore lint/suspicious/noExplicitAny: Service type not compatible with Express
   } as any);
 
-  // Register /sessions service AFTER all custom session endpoints
-  // This ensures custom routes like /sessions/:id/prompt take precedence
-  app.use('/sessions', sessionsService);
-
+  // Note: /sessions service is registered earlier (after custom endpoints but before hooks)
   // Note: Sessions are no longer directly on boards (worktree-only architecture).
   // Sessions are accessed through worktree cards. No cleanup needed on session deletion.
 
