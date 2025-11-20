@@ -1787,6 +1787,7 @@ async function main() {
       },
       params: RouteParams
     ) {
+      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'execute prompts');
       console.log(`📨 [Daemon] Prompt request for session ${params.route?.id?.substring(0, 8)}`);
       console.log(`   Permission mode: ${data.permissionMode || 'not specified'}`);
