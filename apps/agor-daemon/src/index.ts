@@ -833,9 +833,8 @@ async function main() {
 
   // Register custom Feathers services with manual JWT authentication
   // These must be registered BEFORE the default service routes to override them
-  app.use('/sessions/:id/spawn', {
+  const spawnService = {
     async create(data: Partial<import('@agor/core/types').SpawnConfig>, params: RouteParams) {
-      await authenticateParams(params);
       const id = params.route?.id;
       if (!id) throw new Error('Session ID required');
 
@@ -850,15 +849,20 @@ async function main() {
 
       return spawnedSession;
     },
+  };
+
+  app.use('/sessions/:id/spawn', spawnService);
+  app.service('/sessions/:id/spawn').hooks({
+    before: {
+      create: [requireAuth, requireMinimumRole('member', 'spawn sessions')],
+    },
   });
 
-  app.use('/sessions/:id/fork', {
+  const forkService = {
     async create(data: { prompt: string; task_id?: string }, params: RouteParams) {
-      await authenticateParams(params);
       const id = params.route?.id;
       if (!id) throw new Error('Session ID required');
 
-      ensureMinimumRole(params, 'member', 'fork sessions');
       console.log(`🔀 Forking session: ${id.substring(0, 8)}`);
       const forkedSession = await sessionsService.fork(id, data, params);
       console.log(`✅ Fork created: ${forkedSession.session_id.substring(0, 8)}`);
@@ -869,25 +873,41 @@ async function main() {
 
       return forkedSession;
     },
+  };
+
+  app.use('/sessions/:id/fork', forkService);
+  app.service('/sessions/:id/fork').hooks({
+    before: {
+      create: [requireAuth, requireMinimumRole('member', 'fork sessions')],
+    },
   });
 
-  app.use('/sessions/:id/genealogy', {
+  const genealogyService = {
     async find(_data: unknown, params: RouteParams) {
-      await authenticateParams(params);
       const id = params.route?.id;
       if (!id) throw new Error('Session ID required');
 
-      ensureMinimumRole(params, 'member', 'view session genealogy');
       return sessionsService.getGenealogy(id, params);
     },
-    // biome-ignore lint/suspicious/noExplicitAny: FeathersJS route handler type mismatch
-  } as any);
+  };
 
-  app.use('/messages/bulk', {
+  app.use('/sessions/:id/genealogy', genealogyService);
+  app.service('/sessions/:id/genealogy').hooks({
+    before: {
+      find: [requireAuth, requireMinimumRole('member', 'view session genealogy')],
+    },
+  });
+
+  const messagesBulkService = {
     async create(data: unknown, params: RouteParams) {
-      await authenticateParams(params);
-      ensureMinimumRole(params, 'member', 'create messages');
       return messagesService.createMany(data as Message[]);
+    },
+  };
+
+  app.use('/messages/bulk', messagesBulkService);
+  app.service('/messages/bulk').hooks({
+    before: {
+      create: [requireAuth, requireMinimumRole('member', 'create messages')],
     },
   });
 
@@ -1783,7 +1803,7 @@ async function main() {
     }
   }
 
-  app.use('/sessions/:id/prompt', {
+  const promptService = {
     async create(
       data: {
         prompt: string;
@@ -1792,8 +1812,6 @@ async function main() {
       },
       params: RouteParams
     ) {
-      await authenticateParams(params);
-      ensureMinimumRole(params, 'member', 'execute prompts');
       console.log(`📨 [Daemon] Prompt request for session ${params.route?.id?.substring(0, 8)}`);
       console.log(`   Permission mode: ${data.permissionMode || 'not specified'}`);
       console.log(`   Streaming: ${data.stream !== false}`);
@@ -2376,6 +2394,13 @@ async function main() {
         status: TaskStatus.RUNNING,
         streaming: useStreaming, // Inform client whether streaming is enabled
       };
+    },
+  };
+
+  app.use('/sessions/:id/prompt', promptService);
+  app.service('/sessions/:id/prompt').hooks({
+    before: {
+      create: [requireAuth, requireMinimumRole('member', 'execute prompts')],
     },
   });
 
