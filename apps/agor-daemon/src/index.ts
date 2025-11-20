@@ -709,7 +709,8 @@ async function main() {
   const messagesService = createMessagesService(db) as unknown as MessagesServiceImpl;
 
   // Register FeathersJS services
-  app.use('/sessions', sessionsService);
+  // NOTE: /sessions service is registered later (after custom session endpoints)
+  // to ensure custom routes like /sessions/:id/prompt take precedence
   app.use('/tasks', createTasksService(db, app));
   app.use('/leaderboard', createLeaderboardService(db));
 
@@ -3024,6 +3025,10 @@ async function main() {
     },
     // biome-ignore lint/suspicious/noExplicitAny: Service type not compatible with Express
   } as any);
+
+  // Register /sessions service AFTER all custom session endpoints
+  // This ensures custom routes like /sessions/:id/prompt take precedence
+  app.use('/sessions', sessionsService);
 
   // Note: Sessions are no longer directly on boards (worktree-only architecture).
   // Sessions are accessed through worktree cards. No cleanup needed on session deletion.
