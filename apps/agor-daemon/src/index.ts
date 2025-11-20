@@ -857,7 +857,9 @@ async function main() {
     },
   };
 
+  console.log('📝 Registering /sessions/:id/spawn service');
   app.use('/sessions/:id/spawn', spawnService);
+  console.log('📝 Adding hooks to /sessions/:id/spawn');
   app.service('/sessions/:id/spawn').hooks({
     before: {
       create: [
@@ -878,6 +880,7 @@ async function main() {
       ],
     },
   });
+  console.log('✅ /sessions/:id/spawn service registered with hooks');
 
   const forkService = {
     async create(data: { prompt: string; task_id?: string }, params: RouteParams) {
