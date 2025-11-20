@@ -825,15 +825,12 @@ async function main() {
     },
   };
 
-  console.log('📝 Registering /sessions/:id/spawn service');
   app.use('/sessions/:id/spawn', spawnService);
-  console.log('📝 Adding hooks to /sessions/:id/spawn');
   app.service('/sessions/:id/spawn').hooks({
     before: {
       create: [requireAuth, requireMinimumRole('member', 'spawn sessions')],
     },
   });
-  console.log('✅ /sessions/:id/spawn service registered with hooks');
 
   const forkService = {
     async create(data: { prompt: string; task_id?: string }, params: RouteParams) {
@@ -889,9 +886,7 @@ async function main() {
   });
 
   // Register /sessions service AFTER custom session endpoints to ensure route precedence
-  console.log('📝 Registering /sessions base service');
   app.use('/sessions', sessionsService);
-  console.log('✅ /sessions base service registered');
 
   // Configure service hooks for authentication and authorization
   app.service('messages').hooks({
