@@ -808,6 +808,9 @@ async function main() {
   // These must be registered BEFORE the default service routes to override them
   const spawnService = {
     async create(data: Partial<import('@agor/core/types').SpawnConfig>, params: RouteParams) {
+      console.log('🔍 [Spawn Service] Method called');
+      console.log('🔍 [Spawn Service] params.user:', params.user);
+      console.log('🔍 [Spawn Service] params.provider:', params.provider);
 
       const id = params.route?.id;
       if (!id) throw new Error('Session ID required');
@@ -828,7 +831,22 @@ async function main() {
   app.use('/sessions/:id/spawn', spawnService);
   app.service('/sessions/:id/spawn').hooks({
     before: {
-      create: [requireAuth, requireMinimumRole('member', 'spawn sessions')],
+      create: [
+        async (context) => {
+          console.log('🔍 [Spawn Hook] Hook called');
+          console.log('🔍 [Spawn Hook] Headers:', context.params.headers);
+          console.log('🔍 [Spawn Hook] Provider:', context.params.provider);
+          return context;
+        },
+        requireAuth,
+        async (context) => {
+          console.log('🔍 [Spawn Hook] After requireAuth');
+          console.log('🔍 [Spawn Hook] Authentication:', context.params.authentication);
+          console.log('🔍 [Spawn Hook] User:', context.params.user);
+          return context;
+        },
+        requireMinimumRole('member', 'spawn sessions'),
+      ],
     },
   });
 
