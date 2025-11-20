@@ -706,10 +706,72 @@ async function main() {
   // Register core services
   // NOTE: Pass app instance for user preferences access (needed for cross-tool spawning and ready_for_prompt updates)
   const sessionsService = createSessionsService(db, app) as unknown as SessionsServiceImpl;
+  const messagesService = createMessagesService(db) as unknown as MessagesServiceImpl;
+
+  // Register custom Feathers services with manual JWT authentication
+  // These override the default Feathers routes to add JWT support
+  app.use('/sessions/:id/spawn', {
+    async create(data: Partial<import('@agor/core/types').SpawnConfig>, params: RouteParams) {
+      await authenticateParams(params);
+      const id = params.route?.id;
+      if (!id) throw new Error('Session ID required');
+
+      ensureMinimumRole(params, 'member', 'spawn sessions');
+      console.log(`🌱 Spawning session from: ${id.substring(0, 8)}`);
+      const spawnedSession = await sessionsService.spawn(id, data, params);
+      console.log(`✅ Spawn created: ${spawnedSession.session_id.substring(0, 8)}`);
+
+      if (app.io) {
+        app.io.emit('sessions created', spawnedSession);
+      }
+
+      return spawnedSession;
+    },
+  });
+
+  app.use('/sessions/:id/fork', {
+    async create(data: { prompt: string; task_id?: string }, params: RouteParams) {
+      await authenticateParams(params);
+      const id = params.route?.id;
+      if (!id) throw new Error('Session ID required');
+
+      ensureMinimumRole(params, 'member', 'fork sessions');
+      console.log(`🔀 Forking session: ${id.substring(0, 8)}`);
+      const forkedSession = await sessionsService.fork(id, data, params);
+      console.log(`✅ Fork created: ${forkedSession.session_id.substring(0, 8)}`);
+
+      if (app.io) {
+        app.io.emit('sessions created', forkedSession);
+      }
+
+      return forkedSession;
+    },
+  });
+
+  app.use('/sessions/:id/genealogy', {
+    async find(_data: unknown, params: RouteParams) {
+      await authenticateParams(params);
+      const id = params.route?.id;
+      if (!id) throw new Error('Session ID required');
+
+      ensureMinimumRole(params, 'member', 'view session genealogy');
+      return sessionsService.getGenealogy(id, params);
+    },
+    // biome-ignore lint/suspicious/noExplicitAny: FeathersJS route handler type mismatch
+  } as any);
+
+  app.use('/messages/bulk', {
+    async create(data: unknown, params: RouteParams) {
+      await authenticateParams(params);
+      ensureMinimumRole(params, 'member', 'create messages');
+      return messagesService.createMany(data as Message[]);
+    },
+  });
+
+  // Now register FeathersJS services
   app.use('/sessions', sessionsService);
   app.use('/tasks', createTasksService(db, app));
   app.use('/leaderboard', createLeaderboardService(db));
-  const messagesService = createMessagesService(db) as unknown as MessagesServiceImpl;
 
   // Register messages service with custom streaming events
   app.use('/messages', messagesService, {
@@ -1640,72 +1702,28 @@ async function main() {
     });
   }
 
-  // Configure custom route for bulk message creation
-  app.use('/messages/bulk', {
-    async create(data: unknown, params: RouteParams) {
-      ensureMinimumRole(params, 'member', 'create messages');
-      // Type assertion safe: repository validates message structure
-      return messagesService.createMany(data as Message[]);
-    },
-  });
+  /**
+   * Helper function to authenticate JWT tokens in custom Feathers service handlers
+   * Call this at the start of any custom service method that requires authentication
+   */
+  async function authenticateParams(params: RouteParams): Promise<void> {
+    const authHeader = params.headers?.authorization || params.headers?.Authorization;
 
-  // Configure custom methods for sessions service (using sessionsService from line 700)
-  app.use('/sessions/:id/fork', {
-    async create(data: { prompt: string; task_id?: string }, params: RouteParams) {
-      ensureMinimumRole(params, 'member', 'fork sessions');
-      const id = params.route?.id;
-      if (!id) throw new Error('Session ID required');
-      console.log(`🔀 Forking session: ${id.substring(0, 8)}`);
-      const forkedSession = await sessionsService.fork(id, data, params);
-      console.log(`✅ Fork created: ${forkedSession.session_id.substring(0, 8)}`);
-
-      // Manually broadcast the event to all connected clients
-      // Internal service calls don't trigger automatic event publishing even with provider param
-      console.log('📡 [FORK] Manually broadcasting created event to all clients');
-
-      // Manually publish to Socket.io using app.io
-      // Note: We only emit to Socket.io, not the service, to avoid duplicate events
-      if (app.io) {
-        app.io.emit('sessions created', forkedSession);
+    if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      try {
+        const payload = jwt.verify(token, jwtSecret) as { sub: string };
+        const user = await usersService.get(payload.sub);
+        params.user = user as User;
+      } catch (error) {
+        throw new NotAuthenticated('Invalid or expired token');
       }
-
-      return forkedSession;
-    },
-  });
-
-  app.use('/sessions/:id/spawn', {
-    async create(data: Partial<import('@agor/core/types').SpawnConfig>, params: RouteParams) {
-      ensureMinimumRole(params, 'member', 'spawn sessions');
-      const id = params.route?.id;
-      if (!id) throw new Error('Session ID required');
-      console.log(`🌱 Spawning session from: ${id.substring(0, 8)}`);
-      const spawnedSession = await sessionsService.spawn(id, data, params);
-      console.log(`✅ Spawn created: ${spawnedSession.session_id.substring(0, 8)}`);
-
-      // Manually broadcast the event to all connected clients
-      // Internal service calls don't trigger automatic event publishing even with provider param
-      console.log('📡 [SPAWN] Manually broadcasting created event to all clients');
-
-      // Manually publish to Socket.io using app.io
-      // Note: We only emit to Socket.io, not the service, to avoid duplicate events
-      if (app.io) {
-        app.io.emit('sessions created', spawnedSession);
-      }
-
-      return spawnedSession;
-    },
-  });
-
-  // Feathers custom route handler with find method
-  app.use('/sessions/:id/genealogy', {
-    async find(_data: unknown, params: RouteParams) {
-      ensureMinimumRole(params, 'member', 'view session genealogy');
-      const id = params.route?.id;
-      if (!id) throw new Error('Session ID required');
-      return sessionsService.getGenealogy(id, params);
-    },
-    // biome-ignore lint/suspicious/noExplicitAny: FeathersJS route handler type mismatch with Express RouteParams
-  } as any);
+    } else if (!allowAnonymous) {
+      throw new NotAuthenticated('Authentication required');
+    } else {
+      params.user = { user_id: 'anonymous', role: 'viewer' } as User;
+    }
+  }
 
   /**
    * Helper: Safely patch an entity, returning false if it was deleted mid-execution
@@ -2653,6 +2671,7 @@ async function main() {
   // Configure custom route for bulk task creation
   app.use('/tasks/bulk', {
     async create(data: unknown, params: RouteParams) {
+      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'create tasks');
       return tasksService.createMany(data as Partial<Task>[]);
     },
@@ -2663,6 +2682,7 @@ async function main() {
       data: { git_state?: { sha_at_end?: string; commit_message?: string } },
       params: RouteParams
     ) {
+      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'complete tasks');
       const id = params.route?.id;
       if (!id) throw new Error('Task ID required');
@@ -2672,6 +2692,7 @@ async function main() {
 
   app.use('/tasks/:id/fail', {
     async create(data: { error?: string }, params: RouteParams) {
+      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'fail tasks');
       const id = params.route?.id;
       if (!id) throw new Error('Task ID required');
@@ -2683,12 +2704,14 @@ async function main() {
   const reposService = app.service('repos') as unknown as ReposServiceImpl;
   app.use('/repos/local', {
     async create(data: { path: string; slug?: string }, params: RouteParams) {
+      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'add local repositories');
       return reposService.addLocalRepository(data, params);
     },
   });
   app.use('/repos/clone', {
     async create(data: { url: string; name?: string; destination?: string }, params: RouteParams) {
+      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'clone repositories');
       return reposService.cloneRepository(data, params);
     },
@@ -2696,6 +2719,7 @@ async function main() {
 
   app.use('/repos/:id/worktrees', {
     async create(data: { name: string; ref: string; createBranch?: boolean }, params: RouteParams) {
+      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'create worktrees');
       const id = params.route?.id;
       if (!id) throw new Error('Repo ID required');
@@ -2705,6 +2729,7 @@ async function main() {
 
   app.use('/repos/:id/worktrees/:name', {
     async remove(_id: unknown, params: RouteParams & { route?: { name?: string } }) {
+      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'remove worktrees');
       const id = params.route?.id;
       const name = params.route?.name;
@@ -2716,6 +2741,7 @@ async function main() {
 
   app.use('/repos/:id/import-agor-yml', {
     async create(_data: unknown, params: RouteParams) {
+      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'import .agor.yml');
       const id = params.route?.id;
       if (!id) throw new Error('Repo ID required');
@@ -2725,6 +2751,7 @@ async function main() {
 
   app.use('/repos/:id/export-agor-yml', {
     async create(_data: unknown, params: RouteParams) {
+      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'export .agor.yml');
       const id = params.route?.id;
       if (!id) throw new Error('Repo ID required');
@@ -2749,6 +2776,7 @@ async function main() {
   // POST /board-comments/:id/toggle-reaction - Toggle emoji reaction on comment
   app.use('/board-comments/:id/toggle-reaction', {
     async create(data: { user_id: string; emoji: string }, params: RouteParams) {
+      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'react to board comments');
       const id = params.route?.id;
       if (!id) throw new Error('Comment ID required');
@@ -2764,6 +2792,7 @@ async function main() {
   // POST /board-comments/:id/reply - Create a reply to a comment thread
   app.use('/board-comments/:id/reply', {
     async create(data: Partial<import('@agor/core/types').BoardComment>, params: RouteParams) {
+      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'reply to board comments');
       const id = params.route?.id;
       if (!id) throw new Error('Comment ID required');
@@ -2784,6 +2813,7 @@ async function main() {
   // POST /worktrees/:id/start - Start environment
   app.use('/worktrees/:id/start', {
     async create(_data: unknown, params: RouteParams) {
+      await authenticateParams(params);
       ensureMinimumRole(params, 'admin', 'start worktree environments');
       const id = params.route?.id;
       if (!id) throw new Error('Worktree ID required');
@@ -2794,6 +2824,7 @@ async function main() {
   // POST /worktrees/:id/stop - Stop environment
   app.use('/worktrees/:id/stop', {
     async create(_data: unknown, params: RouteParams) {
+      await authenticateParams(params);
       ensureMinimumRole(params, 'admin', 'stop worktree environments');
       const id = params.route?.id;
       if (!id) throw new Error('Worktree ID required');
@@ -2804,6 +2835,7 @@ async function main() {
   // POST /worktrees/:id/restart - Restart environment
   app.use('/worktrees/:id/restart', {
     async create(_data: unknown, params: RouteParams) {
+      await authenticateParams(params);
       ensureMinimumRole(params, 'admin', 'restart worktree environments');
       const id = params.route?.id;
       if (!id) throw new Error('Worktree ID required');
@@ -2817,6 +2849,7 @@ async function main() {
   // GET /worktrees/:id/health - Check environment health
   app.use('/worktrees/:id/health', {
     async find(_data: unknown, params: RouteParams) {
+      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'check worktree health');
       const id = params.route?.id;
       if (!id) throw new Error('Worktree ID required');
@@ -2828,6 +2861,7 @@ async function main() {
   // POST /worktrees/:id/archive-or-delete - Archive or delete worktree
   app.use('/worktrees/:id/archive-or-delete', {
     async create(data: unknown, params: RouteParams) {
+      await authenticateParams(params);
       ensureMinimumRole(params, 'admin', 'archive or delete worktrees');
       const id = params.route?.id;
       if (!id) throw new Error('Worktree ID required');
@@ -2847,6 +2881,7 @@ async function main() {
   // POST /worktrees/:id/unarchive - Unarchive worktree
   app.use('/worktrees/:id/unarchive', {
     async create(data: unknown, params: RouteParams) {
+      await authenticateParams(params);
       ensureMinimumRole(params, 'admin', 'unarchive worktrees');
       const id = params.route?.id;
       if (!id) throw new Error('Worktree ID required');
@@ -2865,6 +2900,7 @@ async function main() {
     async find(params: Params) {
       console.log('📋 Logs endpoint called');
 
+      await authenticateParams(params || {});
       ensureMinimumRole(params || {}, 'member', 'view worktree logs');
 
       // Extract worktree ID from query params
@@ -2885,6 +2921,7 @@ async function main() {
   const boardsService = app.service('boards') as unknown as BoardsServiceImpl;
   app.use('/boards/:id/sessions', {
     async create(data: { sessionId: string }, params: RouteParams) {
+      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'modify board sessions');
       const id = params.route?.id;
       if (!id) throw new Error('Board ID required');
@@ -2899,6 +2936,7 @@ async function main() {
   // GET /sessions/:id/mcp-servers - List MCP servers for a session
   app.use('/sessions/:id/mcp-servers', {
     async find(_data: unknown, params: RouteParams) {
+      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'view session MCP servers');
       const id = params.route?.id;
       if (!id) throw new Error('Session ID required');
@@ -2912,6 +2950,7 @@ async function main() {
     },
     // POST /sessions/:id/mcp-servers - Add MCP server to session
     async create(data: { mcpServerId: string }, params: RouteParams) {
+      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'modify session MCP servers');
       const id = params.route?.id;
       if (!id) throw new Error('Session ID required');
@@ -2940,6 +2979,7 @@ async function main() {
   // DELETE /sessions/:id/mcp-servers/:mcpId - Remove MCP server from session
   app.use('/sessions/:id/mcp-servers/:mcpId', {
     async remove(_id: unknown, params: RouteParams & { route?: { mcpId?: string } }) {
+      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'modify session MCP servers');
       const id = params.route?.id;
       const mcpId = params.route?.mcpId;
@@ -2967,6 +3007,7 @@ async function main() {
       data: { enabled: boolean },
       params: RouteParams & { route?: { mcpId?: string } }
     ) {
+      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'modify session MCP servers');
       const id = params.route?.id;
       const mcpId = params.route?.mcpId;
