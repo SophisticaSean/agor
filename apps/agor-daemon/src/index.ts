@@ -808,11 +808,6 @@ async function main() {
   // These must be registered BEFORE the default service routes to override them
   const spawnService = {
     async create(data: Partial<import('@agor/core/types').SpawnConfig>, params: RouteParams) {
-      console.log('🔍 [Spawn] Service method called');
-      console.log('🔍 [Spawn] params.user:', params.user);
-      console.log('🔍 [Spawn] params.authentication:', params.authentication);
-      console.log('🔍 [Spawn] params.provider:', params.provider);
-      console.log('🔍 [Spawn] params keys:', Object.keys(params));
 
       const id = params.route?.id;
       if (!id) throw new Error('Session ID required');
@@ -2704,7 +2699,6 @@ async function main() {
   // Configure custom route for bulk task creation
   app.use('/tasks/bulk', {
     async create(data: unknown, params: RouteParams) {
-      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'create tasks');
       return tasksService.createMany(data as Partial<Task>[]);
     },
@@ -2715,7 +2709,6 @@ async function main() {
       data: { git_state?: { sha_at_end?: string; commit_message?: string } },
       params: RouteParams
     ) {
-      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'complete tasks');
       const id = params.route?.id;
       if (!id) throw new Error('Task ID required');
@@ -2725,7 +2718,6 @@ async function main() {
 
   app.use('/tasks/:id/fail', {
     async create(data: { error?: string }, params: RouteParams) {
-      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'fail tasks');
       const id = params.route?.id;
       if (!id) throw new Error('Task ID required');
@@ -2737,14 +2729,12 @@ async function main() {
   const reposService = app.service('repos') as unknown as ReposServiceImpl;
   app.use('/repos/local', {
     async create(data: { path: string; slug?: string }, params: RouteParams) {
-      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'add local repositories');
       return reposService.addLocalRepository(data, params);
     },
   });
   app.use('/repos/clone', {
     async create(data: { url: string; name?: string; destination?: string }, params: RouteParams) {
-      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'clone repositories');
       return reposService.cloneRepository(data, params);
     },
@@ -2752,7 +2742,6 @@ async function main() {
 
   app.use('/repos/:id/worktrees', {
     async create(data: { name: string; ref: string; createBranch?: boolean }, params: RouteParams) {
-      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'create worktrees');
       const id = params.route?.id;
       if (!id) throw new Error('Repo ID required');
@@ -2762,7 +2751,6 @@ async function main() {
 
   app.use('/repos/:id/worktrees/:name', {
     async remove(_id: unknown, params: RouteParams & { route?: { name?: string } }) {
-      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'remove worktrees');
       const id = params.route?.id;
       const name = params.route?.name;
@@ -2774,7 +2762,6 @@ async function main() {
 
   app.use('/repos/:id/import-agor-yml', {
     async create(_data: unknown, params: RouteParams) {
-      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'import .agor.yml');
       const id = params.route?.id;
       if (!id) throw new Error('Repo ID required');
@@ -2784,7 +2771,6 @@ async function main() {
 
   app.use('/repos/:id/export-agor-yml', {
     async create(_data: unknown, params: RouteParams) {
-      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'export .agor.yml');
       const id = params.route?.id;
       if (!id) throw new Error('Repo ID required');
@@ -2809,7 +2795,6 @@ async function main() {
   // POST /board-comments/:id/toggle-reaction - Toggle emoji reaction on comment
   app.use('/board-comments/:id/toggle-reaction', {
     async create(data: { user_id: string; emoji: string }, params: RouteParams) {
-      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'react to board comments');
       const id = params.route?.id;
       if (!id) throw new Error('Comment ID required');
@@ -2825,7 +2810,6 @@ async function main() {
   // POST /board-comments/:id/reply - Create a reply to a comment thread
   app.use('/board-comments/:id/reply', {
     async create(data: Partial<import('@agor/core/types').BoardComment>, params: RouteParams) {
-      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'reply to board comments');
       const id = params.route?.id;
       if (!id) throw new Error('Comment ID required');
@@ -2846,7 +2830,6 @@ async function main() {
   // POST /worktrees/:id/start - Start environment
   app.use('/worktrees/:id/start', {
     async create(_data: unknown, params: RouteParams) {
-      await authenticateParams(params);
       ensureMinimumRole(params, 'admin', 'start worktree environments');
       const id = params.route?.id;
       if (!id) throw new Error('Worktree ID required');
@@ -2857,7 +2840,6 @@ async function main() {
   // POST /worktrees/:id/stop - Stop environment
   app.use('/worktrees/:id/stop', {
     async create(_data: unknown, params: RouteParams) {
-      await authenticateParams(params);
       ensureMinimumRole(params, 'admin', 'stop worktree environments');
       const id = params.route?.id;
       if (!id) throw new Error('Worktree ID required');
@@ -2868,7 +2850,6 @@ async function main() {
   // POST /worktrees/:id/restart - Restart environment
   app.use('/worktrees/:id/restart', {
     async create(_data: unknown, params: RouteParams) {
-      await authenticateParams(params);
       ensureMinimumRole(params, 'admin', 'restart worktree environments');
       const id = params.route?.id;
       if (!id) throw new Error('Worktree ID required');
@@ -2882,7 +2863,6 @@ async function main() {
   // GET /worktrees/:id/health - Check environment health
   app.use('/worktrees/:id/health', {
     async find(_data: unknown, params: RouteParams) {
-      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'check worktree health');
       const id = params.route?.id;
       if (!id) throw new Error('Worktree ID required');
@@ -2894,7 +2874,6 @@ async function main() {
   // POST /worktrees/:id/archive-or-delete - Archive or delete worktree
   app.use('/worktrees/:id/archive-or-delete', {
     async create(data: unknown, params: RouteParams) {
-      await authenticateParams(params);
       ensureMinimumRole(params, 'admin', 'archive or delete worktrees');
       const id = params.route?.id;
       if (!id) throw new Error('Worktree ID required');
@@ -2914,7 +2893,6 @@ async function main() {
   // POST /worktrees/:id/unarchive - Unarchive worktree
   app.use('/worktrees/:id/unarchive', {
     async create(data: unknown, params: RouteParams) {
-      await authenticateParams(params);
       ensureMinimumRole(params, 'admin', 'unarchive worktrees');
       const id = params.route?.id;
       if (!id) throw new Error('Worktree ID required');
@@ -2933,7 +2911,6 @@ async function main() {
     async find(params: Params) {
       console.log('📋 Logs endpoint called');
 
-      await authenticateParams(params || {});
       ensureMinimumRole(params || {}, 'member', 'view worktree logs');
 
       // Extract worktree ID from query params
@@ -2954,7 +2931,6 @@ async function main() {
   const boardsService = app.service('boards') as unknown as BoardsServiceImpl;
   app.use('/boards/:id/sessions', {
     async create(data: { sessionId: string }, params: RouteParams) {
-      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'modify board sessions');
       const id = params.route?.id;
       if (!id) throw new Error('Board ID required');
@@ -2969,7 +2945,6 @@ async function main() {
   // GET /sessions/:id/mcp-servers - List MCP servers for a session
   app.use('/sessions/:id/mcp-servers', {
     async find(_data: unknown, params: RouteParams) {
-      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'view session MCP servers');
       const id = params.route?.id;
       if (!id) throw new Error('Session ID required');
@@ -2983,7 +2958,6 @@ async function main() {
     },
     // POST /sessions/:id/mcp-servers - Add MCP server to session
     async create(data: { mcpServerId: string }, params: RouteParams) {
-      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'modify session MCP servers');
       const id = params.route?.id;
       if (!id) throw new Error('Session ID required');
@@ -3012,7 +2986,6 @@ async function main() {
   // DELETE /sessions/:id/mcp-servers/:mcpId - Remove MCP server from session
   app.use('/sessions/:id/mcp-servers/:mcpId', {
     async remove(_id: unknown, params: RouteParams & { route?: { mcpId?: string } }) {
-      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'modify session MCP servers');
       const id = params.route?.id;
       const mcpId = params.route?.mcpId;
@@ -3040,7 +3013,6 @@ async function main() {
       data: { enabled: boolean },
       params: RouteParams & { route?: { mcpId?: string } }
     ) {
-      await authenticateParams(params);
       ensureMinimumRole(params, 'member', 'modify session MCP servers');
       const id = params.route?.id;
       const mcpId = params.route?.mcpId;
