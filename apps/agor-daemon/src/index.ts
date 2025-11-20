@@ -865,7 +865,8 @@ async function main() {
     },
   };
 
-  app.use('/sessions/:id/genealogy', genealogyService);
+  // biome-ignore lint/suspicious/noExplicitAny: FeathersJS service type compatibility
+  app.use('/sessions/:id/genealogy', genealogyService as any);
   app.service('/sessions/:id/genealogy').hooks({
     before: {
       find: [requireAuth, requireMinimumRole('member', 'view session genealogy')],
