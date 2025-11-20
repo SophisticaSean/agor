@@ -809,6 +809,10 @@ async function main() {
    * Call this at the start of any custom service method that requires authentication
    */
   async function authenticateParams(params: RouteParams): Promise<void> {
+    // Debug: log params structure
+    console.log('authenticateParams - params keys:', Object.keys(params));
+    console.log('authenticateParams - params.headers:', params.headers);
+
     const authHeader = params.headers?.authorization || params.headers?.Authorization;
 
     if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
