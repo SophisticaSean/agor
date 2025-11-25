@@ -2881,7 +2881,7 @@ async function main() {
   };
 
   // POST /board-comments/:id/toggle-reaction - Toggle emoji reaction on comment
-  app.use('/board-comments/:id/toggle-reaction', {
+  const boardCommentsToggleReactionService = {
     async create(data: { user_id: string; emoji: string }, params: RouteParams) {
       ensureMinimumRole(params, 'member', 'react to board comments');
       const id = params.route?.id;
@@ -2893,10 +2893,20 @@ async function main() {
       app.service('board-comments').emit('patched', updated);
       return updated;
     },
+  };
+  app.use('/board-comments/:id/toggle-reaction', boardCommentsToggleReactionService);
+  app.service('/board-comments/:id/toggle-reaction').hooks({
+    before: {
+      create: [
+        populateRouteParams,
+        requireAuth,
+        requireMinimumRole('member', 'react to board comments'),
+      ],
+    },
   });
 
   // POST /board-comments/:id/reply - Create a reply to a comment thread
-  app.use('/board-comments/:id/reply', {
+  const boardCommentsReplyService = {
     async create(data: Partial<import('@agor/core/types').BoardComment>, params: RouteParams) {
       ensureMinimumRole(params, 'member', 'reply to board comments');
       const id = params.route?.id;
@@ -2907,6 +2917,16 @@ async function main() {
       // Manually emit created event for real-time updates
       app.service('board-comments').emit('created', reply);
       return reply;
+    },
+  };
+  app.use('/board-comments/:id/reply', boardCommentsReplyService);
+  app.service('/board-comments/:id/reply').hooks({
+    before: {
+      create: [
+        populateRouteParams,
+        requireAuth,
+        requireMinimumRole('member', 'reply to board comments'),
+      ],
     },
   });
 
@@ -3017,13 +3037,24 @@ async function main() {
 
   // Configure custom methods for boards service
   const boardsService = app.service('boards') as unknown as BoardsServiceImpl;
-  app.use('/boards/:id/sessions', {
+
+  const boardsSessionsService = {
     async create(data: { sessionId: string }, params: RouteParams) {
       ensureMinimumRole(params, 'member', 'modify board sessions');
       const id = params.route?.id;
       if (!id) throw new Error('Board ID required');
       if (!data.sessionId) throw new Error('Session ID required');
       return boardsService.addSession(id, data.sessionId, params);
+    },
+  };
+  app.use('/boards/:id/sessions', boardsSessionsService);
+  app.service('/boards/:id/sessions').hooks({
+    before: {
+      create: [
+        populateRouteParams,
+        requireAuth,
+        requireMinimumRole('member', 'modify board sessions'),
+      ],
     },
   });
 
