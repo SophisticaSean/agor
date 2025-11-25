@@ -2777,29 +2777,49 @@ async function main() {
 
   // Configure custom methods for repos service
   const reposService = app.service('repos') as unknown as ReposServiceImpl;
-  app.use('/repos/local', {
+
+  const reposLocalService = {
     async create(data: { path: string; slug?: string }, params: RouteParams) {
       ensureMinimumRole(params, 'member', 'add local repositories');
       return reposService.addLocalRepository(data, params);
     },
+  };
+  app.use('/repos/local', reposLocalService);
+  app.service('/repos/local').hooks({
+    before: {
+      create: [requireAuth, requireMinimumRole('member', 'add local repositories')],
+    },
   });
-  app.use('/repos/clone', {
+
+  const reposCloneService = {
     async create(data: { url: string; name?: string; destination?: string }, params: RouteParams) {
       ensureMinimumRole(params, 'member', 'clone repositories');
       return reposService.cloneRepository(data, params);
     },
+  };
+  app.use('/repos/clone', reposCloneService);
+  app.service('/repos/clone').hooks({
+    before: {
+      create: [requireAuth, requireMinimumRole('member', 'clone repositories')],
+    },
   });
 
-  app.use('/repos/:id/worktrees', {
+  const reposWorktreesService = {
     async create(data: { name: string; ref: string; createBranch?: boolean }, params: RouteParams) {
       ensureMinimumRole(params, 'member', 'create worktrees');
       const id = params.route?.id;
       if (!id) throw new Error('Repo ID required');
       return reposService.createWorktree(id, data, params);
     },
+  };
+  app.use('/repos/:id/worktrees', reposWorktreesService);
+  app.service('/repos/:id/worktrees').hooks({
+    before: {
+      create: [populateRouteParams, requireAuth, requireMinimumRole('member', 'create worktrees')],
+    },
   });
 
-  app.use('/repos/:id/worktrees/:name', {
+  const reposWorktreesDeleteService = {
     async remove(_id: unknown, params: RouteParams & { route?: { name?: string } }) {
       ensureMinimumRole(params, 'member', 'remove worktrees');
       const id = params.route?.id;
@@ -2808,23 +2828,41 @@ async function main() {
       if (!name) throw new Error('Worktree name required');
       return reposService.removeWorktree(id, name, params);
     },
+  };
+  app.use('/repos/:id/worktrees/:name', reposWorktreesDeleteService);
+  app.service('/repos/:id/worktrees/:name').hooks({
+    before: {
+      remove: [populateRouteParams, requireAuth, requireMinimumRole('member', 'remove worktrees')],
+    },
   });
 
-  app.use('/repos/:id/import-agor-yml', {
+  const reposImportAgorYmlService = {
     async create(_data: unknown, params: RouteParams) {
       ensureMinimumRole(params, 'member', 'import .agor.yml');
       const id = params.route?.id;
       if (!id) throw new Error('Repo ID required');
       return reposService.importFromAgorYml(id, {}, params);
     },
+  };
+  app.use('/repos/:id/import-agor-yml', reposImportAgorYmlService);
+  app.service('/repos/:id/import-agor-yml').hooks({
+    before: {
+      create: [populateRouteParams, requireAuth, requireMinimumRole('member', 'import .agor.yml')],
+    },
   });
 
-  app.use('/repos/:id/export-agor-yml', {
+  const reposExportAgorYmlService = {
     async create(_data: unknown, params: RouteParams) {
       ensureMinimumRole(params, 'member', 'export .agor.yml');
       const id = params.route?.id;
       if (!id) throw new Error('Repo ID required');
       return reposService.exportToAgorYml(id, {}, params);
+    },
+  };
+  app.use('/repos/:id/export-agor-yml', reposExportAgorYmlService);
+  app.service('/repos/:id/export-agor-yml').hooks({
+    before: {
+      create: [populateRouteParams, requireAuth, requireMinimumRole('member', 'export .agor.yml')],
     },
   });
 
