@@ -13,6 +13,7 @@
 
 import type { Database } from '@agor/core/db';
 import { createDatabaseAsync } from '@agor/core/db';
+import { feathers } from '@agor/core/feathers';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 describe('JWT Authentication Integration', () => {
@@ -27,11 +28,10 @@ describe('JWT Authentication Integration', () => {
     expect(db).toBeDefined();
   });
 
-  it('should import from @agor/core/db without errors', async () => {
+  it('should import from @agor/core/db without errors', () => {
     // This test verifies that vitest can resolve @agor/core/db imports
-    const { createDatabaseAsync: createDb } = await import('@agor/core/db');
-    expect(createDb).toBeDefined();
-    expect(typeof createDb).toBe('function');
+    expect(createDatabaseAsync).toBeDefined();
+    expect(typeof createDatabaseAsync).toBe('function');
   });
 
   it('should import from @agor/core/types without errors', async () => {
@@ -40,9 +40,8 @@ describe('JWT Authentication Integration', () => {
     expect(types).toBeDefined();
   });
 
-  it('should import from @agor/core/feathers without errors', async () => {
+  it('should import from @agor/core/feathers without errors', () => {
     // This test verifies that vitest can resolve @agor/core/feathers imports
-    const { feathers } = await import('@agor/core/feathers');
     expect(feathers).toBeDefined();
     expect(typeof feathers).toBe('function');
   });
