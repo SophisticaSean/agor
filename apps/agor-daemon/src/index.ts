@@ -2760,12 +2760,18 @@ async function main() {
     },
   });
 
-  app.use('/tasks/:id/fail', {
+  const tasksFailService = {
     async create(data: { error?: string }, params: RouteParams) {
       ensureMinimumRole(params, 'member', 'fail tasks');
       const id = params.route?.id;
       if (!id) throw new Error('Task ID required');
       return tasksService.fail(id, data, params);
+    },
+  };
+  app.use('/tasks/:id/fail', tasksFailService);
+  app.service('/tasks/:id/fail').hooks({
+    before: {
+      create: [populateRouteParams, requireAuth, requireMinimumRole('member', 'fail tasks')],
     },
   });
 
