@@ -2411,7 +2411,7 @@ async function main() {
   });
 
   // Stop execution endpoint
-  app.use('/sessions/:id/stop', {
+  const stopService = {
     async create(_data: unknown, params: RouteParams) {
       ensureMinimumRole(params, 'member', 'stop sessions');
       const id = params.route?.id;
@@ -2546,6 +2546,12 @@ async function main() {
 
       return result;
     },
+  };
+  app.use('/sessions/:id/stop', stopService);
+  app.service('/sessions/:id/stop').hooks({
+    before: {
+      create: [populateRouteParams, requireAuth, requireMinimumRole('member', 'stop sessions')],
+    },
   });
 
   /**
@@ -2556,7 +2562,7 @@ async function main() {
    * NOTE: Queue deletion is handled via messages service directly (client.service('messages').remove(id))
    * This keeps the client simple and avoids FeathersJS nested route issues
    */
-  app.use('/sessions/:id/messages/queue', {
+  const messagesQueueService = {
     async create(data: { prompt: string }, params: RouteParams) {
       ensureMinimumRole(params, 'member', 'queue messages');
 
@@ -2598,7 +2604,14 @@ async function main() {
       };
     },
     // biome-ignore lint/suspicious/noExplicitAny: Service type not compatible with Express
-  } as any);
+  } as any;
+  app.use('/sessions/:id/messages/queue', messagesQueueService);
+  app.service('/sessions/:id/messages/queue').hooks({
+    before: {
+      create: [populateRouteParams, requireAuth, requireMinimumRole('member', 'queue messages')],
+      find: [populateRouteParams, requireAuth, requireMinimumRole('member', 'view queue')],
+    },
+  });
 
   /**
    * Process the next queued message for a session
@@ -2687,7 +2700,7 @@ async function main() {
   });
 
   // Permission decision endpoint
-  app.use('/sessions/:id/permission-decision', {
+  const permissionDecisionService = {
     async create(data: PermissionDecision, params: RouteParams) {
       ensureMinimumRole(params, 'member', 'respond to permission requests');
       const id = params.route?.id;
@@ -2700,20 +2713,36 @@ async function main() {
 
       return { success: true };
     },
+  };
+  app.use('/sessions/:id/permission-decision', permissionDecisionService);
+  app.service('/sessions/:id/permission-decision').hooks({
+    before: {
+      create: [
+        populateRouteParams,
+        requireAuth,
+        requireMinimumRole('member', 'respond to permission requests'),
+      ],
+    },
   });
 
   // Configure custom methods for tasks service
   const tasksService = app.service('tasks') as unknown as TasksServiceImpl;
 
   // Configure custom route for bulk task creation
-  app.use('/tasks/bulk', {
+  const tasksBulkService = {
     async create(data: unknown, params: RouteParams) {
       ensureMinimumRole(params, 'member', 'create tasks');
       return tasksService.createMany(data as Partial<Task>[]);
     },
+  };
+  app.use('/tasks/bulk', tasksBulkService);
+  app.service('/tasks/bulk').hooks({
+    before: {
+      create: [requireAuth, requireMinimumRole('member', 'create tasks')],
+    },
   });
 
-  app.use('/tasks/:id/complete', {
+  const tasksCompleteService = {
     async create(
       data: { git_state?: { sha_at_end?: string; commit_message?: string } },
       params: RouteParams
@@ -2722,6 +2751,12 @@ async function main() {
       const id = params.route?.id;
       if (!id) throw new Error('Task ID required');
       return tasksService.complete(id, data, params);
+    },
+  };
+  app.use('/tasks/:id/complete', tasksCompleteService);
+  app.service('/tasks/:id/complete').hooks({
+    before: {
+      create: [populateRouteParams, requireAuth, requireMinimumRole('member', 'complete tasks')],
     },
   });
 
