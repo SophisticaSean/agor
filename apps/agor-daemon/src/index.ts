@@ -2936,27 +2936,47 @@ async function main() {
   ) as unknown as import('./declarations').WorktreesServiceImpl;
 
   // POST /worktrees/:id/start - Start environment
-  app.use('/worktrees/:id/start', {
+  const worktreesStartService = {
     async create(_data: unknown, params: RouteParams) {
       ensureMinimumRole(params, 'admin', 'start worktree environments');
       const id = params.route?.id;
       if (!id) throw new Error('Worktree ID required');
       return worktreesService.startEnvironment(id as import('@agor/core/types').WorktreeID, params);
     },
+  };
+  app.use('/worktrees/:id/start', worktreesStartService);
+  app.service('/worktrees/:id/start').hooks({
+    before: {
+      create: [
+        populateRouteParams,
+        requireAuth,
+        requireMinimumRole('admin', 'start worktree environments'),
+      ],
+    },
   });
 
   // POST /worktrees/:id/stop - Stop environment
-  app.use('/worktrees/:id/stop', {
+  const worktreesStopService = {
     async create(_data: unknown, params: RouteParams) {
       ensureMinimumRole(params, 'admin', 'stop worktree environments');
       const id = params.route?.id;
       if (!id) throw new Error('Worktree ID required');
       return worktreesService.stopEnvironment(id as import('@agor/core/types').WorktreeID, params);
     },
+  };
+  app.use('/worktrees/:id/stop', worktreesStopService);
+  app.service('/worktrees/:id/stop').hooks({
+    before: {
+      create: [
+        populateRouteParams,
+        requireAuth,
+        requireMinimumRole('admin', 'stop worktree environments'),
+      ],
+    },
   });
 
   // POST /worktrees/:id/restart - Restart environment
-  app.use('/worktrees/:id/restart', {
+  const worktreesRestartService = {
     async create(_data: unknown, params: RouteParams) {
       ensureMinimumRole(params, 'admin', 'restart worktree environments');
       const id = params.route?.id;
@@ -2966,10 +2986,20 @@ async function main() {
         params
       );
     },
+  };
+  app.use('/worktrees/:id/restart', worktreesRestartService);
+  app.service('/worktrees/:id/restart').hooks({
+    before: {
+      create: [
+        populateRouteParams,
+        requireAuth,
+        requireMinimumRole('admin', 'restart worktree environments'),
+      ],
+    },
   });
 
   // GET /worktrees/:id/health - Check environment health
-  app.use('/worktrees/:id/health', {
+  const worktreesHealthService = {
     async find(_data: unknown, params: RouteParams) {
       ensureMinimumRole(params, 'member', 'check worktree health');
       const id = params.route?.id;
@@ -2977,10 +3007,20 @@ async function main() {
       return worktreesService.checkHealth(id as import('@agor/core/types').WorktreeID, params);
     },
     // biome-ignore lint/suspicious/noExplicitAny: Service type not compatible with Express
-  } as any);
+  } as any;
+  app.use('/worktrees/:id/health', worktreesHealthService);
+  app.service('/worktrees/:id/health').hooks({
+    before: {
+      find: [
+        populateRouteParams,
+        requireAuth,
+        requireMinimumRole('member', 'check worktree health'),
+      ],
+    },
+  });
 
   // POST /worktrees/:id/archive-or-delete - Archive or delete worktree
-  app.use('/worktrees/:id/archive-or-delete', {
+  const worktreesArchiveOrDeleteService = {
     async create(data: unknown, params: RouteParams) {
       ensureMinimumRole(params, 'admin', 'archive or delete worktrees');
       const id = params.route?.id;
@@ -2996,10 +3036,20 @@ async function main() {
       );
     },
     // biome-ignore lint/suspicious/noExplicitAny: Service type not compatible with Express
-  } as any);
+  } as any;
+  app.use('/worktrees/:id/archive-or-delete', worktreesArchiveOrDeleteService);
+  app.service('/worktrees/:id/archive-or-delete').hooks({
+    before: {
+      create: [
+        populateRouteParams,
+        requireAuth,
+        requireMinimumRole('admin', 'archive or delete worktrees'),
+      ],
+    },
+  });
 
   // POST /worktrees/:id/unarchive - Unarchive worktree
-  app.use('/worktrees/:id/unarchive', {
+  const worktreesUnarchiveService = {
     async create(data: unknown, params: RouteParams) {
       ensureMinimumRole(params, 'admin', 'unarchive worktrees');
       const id = params.route?.id;
@@ -3012,10 +3062,20 @@ async function main() {
       );
     },
     // biome-ignore lint/suspicious/noExplicitAny: Service type not compatible with Express
-  } as any);
+  } as any;
+  app.use('/worktrees/:id/unarchive', worktreesUnarchiveService);
+  app.service('/worktrees/:id/unarchive').hooks({
+    before: {
+      create: [
+        populateRouteParams,
+        requireAuth,
+        requireMinimumRole('admin', 'unarchive worktrees'),
+      ],
+    },
+  });
 
   // GET /worktrees/logs?worktree_id=xxx - Get environment logs
-  app.use('/worktrees/logs', {
+  const worktreesLogsService = {
     async find(params: Params) {
       console.log('📋 Logs endpoint called');
 
@@ -3033,7 +3093,13 @@ async function main() {
       return worktreesService.getLogs(id as import('@agor/core/types').WorktreeID, params);
     },
     // biome-ignore lint/suspicious/noExplicitAny: Service type not compatible with Express
-  } as any);
+  } as any;
+  app.use('/worktrees/logs', worktreesLogsService);
+  app.service('/worktrees/logs').hooks({
+    before: {
+      find: [requireAuth, requireMinimumRole('member', 'view worktree logs')],
+    },
+  });
 
   // Configure custom methods for boards service
   const boardsService = app.service('boards') as unknown as BoardsServiceImpl;
