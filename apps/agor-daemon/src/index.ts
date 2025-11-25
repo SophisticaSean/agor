@@ -158,8 +158,29 @@ interface RouteParams extends Params {
     id?: string;
     messageId?: string;
     mcpId?: string;
+    name?: string;
   };
+  user?: import('./declarations').AuthenticatedUser;
 }
+
+/**
+ * Hook to populate params.route from Express req.params
+ */
+const populateRouteParams = async (context: import('./declarations').HookContext) => {
+  const params = context.params as RouteParams & {
+    __raw?: { req?: { params: Record<string, string> } };
+  };
+  if (params.provider === 'rest' && params.__raw?.req) {
+    const expressParams = params.__raw.req.params;
+    params.route = {
+      id: expressParams.id,
+      messageId: expressParams.messageId,
+      mcpId: expressParams.mcpId,
+      name: expressParams.name,
+    };
+  }
+  return context;
+};
 
 /**
  * FeathersJS extends Socket.io socket with authentication context
@@ -831,22 +852,7 @@ async function main() {
   app.use('/sessions/:id/spawn', spawnService);
   app.service('/sessions/:id/spawn').hooks({
     before: {
-      create: [
-        async (context) => {
-          console.log('🔍 [Spawn Hook] Hook called');
-          console.log('🔍 [Spawn Hook] Headers:', context.params.headers);
-          console.log('🔍 [Spawn Hook] Provider:', context.params.provider);
-          return context;
-        },
-        requireAuth,
-        async (context) => {
-          console.log('🔍 [Spawn Hook] After requireAuth');
-          console.log('🔍 [Spawn Hook] Authentication:', context.params.authentication);
-          console.log('🔍 [Spawn Hook] User:', context.params.user);
-          return context;
-        },
-        requireMinimumRole('member', 'spawn sessions'),
-      ],
+      create: [populateRouteParams, requireAuth, requireMinimumRole('member', 'spawn sessions')],
     },
   });
 
@@ -870,7 +876,7 @@ async function main() {
   app.use('/sessions/:id/fork', forkService);
   app.service('/sessions/:id/fork').hooks({
     before: {
-      create: [requireAuth, requireMinimumRole('member', 'fork sessions')],
+      create: [populateRouteParams, requireAuth, requireMinimumRole('member', 'fork sessions')],
     },
   });
 
@@ -887,7 +893,11 @@ async function main() {
   app.use('/sessions/:id/genealogy', genealogyService as any);
   app.service('/sessions/:id/genealogy').hooks({
     before: {
-      find: [requireAuth, requireMinimumRole('member', 'view session genealogy')],
+      find: [
+        populateRouteParams,
+        requireAuth,
+        requireMinimumRole('member', 'view session genealogy'),
+      ],
     },
   });
 
@@ -900,7 +910,7 @@ async function main() {
   app.use('/messages/bulk', messagesBulkService);
   app.service('/messages/bulk').hooks({
     before: {
-      create: [requireAuth, requireMinimumRole('member', 'create messages')],
+      create: [populateRouteParams, requireAuth, requireMinimumRole('member', 'create messages')],
     },
   });
 
@@ -2396,7 +2406,7 @@ async function main() {
   app.use('/sessions/:id/prompt', promptService);
   app.service('/sessions/:id/prompt').hooks({
     before: {
-      create: [requireAuth, requireMinimumRole('member', 'execute prompts')],
+      create: [populateRouteParams, requireAuth, requireMinimumRole('member', 'execute prompts')],
     },
   });
 
