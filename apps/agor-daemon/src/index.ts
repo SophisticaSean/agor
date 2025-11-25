@@ -3128,7 +3128,7 @@ async function main() {
   // (sessionMCPServersService already created above for top-level service)
 
   // GET /sessions/:id/mcp-servers - List MCP servers for a session
-  app.use('/sessions/:id/mcp-servers', {
+  const sessionsMcpServersService = {
     async find(_data: unknown, params: RouteParams) {
       ensureMinimumRole(params, 'member', 'view session MCP servers');
       const id = params.route?.id;
@@ -3166,10 +3166,25 @@ async function main() {
       return relationship;
     },
     // biome-ignore lint/suspicious/noExplicitAny: Service type not compatible with Express
-  } as any);
+  } as any;
+  app.use('/sessions/:id/mcp-servers', sessionsMcpServersService);
+  app.service('/sessions/:id/mcp-servers').hooks({
+    before: {
+      find: [
+        populateRouteParams,
+        requireAuth,
+        requireMinimumRole('member', 'view session MCP servers'),
+      ],
+      create: [
+        populateRouteParams,
+        requireAuth,
+        requireMinimumRole('member', 'modify session MCP servers'),
+      ],
+    },
+  });
 
   // DELETE /sessions/:id/mcp-servers/:mcpId - Remove MCP server from session
-  app.use('/sessions/:id/mcp-servers/:mcpId', {
+  const sessionsMcpServersDeleteService = {
     async remove(_id: unknown, params: RouteParams & { route?: { mcpId?: string } }) {
       ensureMinimumRole(params, 'member', 'modify session MCP servers');
       const id = params.route?.id;
@@ -3212,7 +3227,22 @@ async function main() {
       );
     },
     // biome-ignore lint/suspicious/noExplicitAny: Service type not compatible with Express
-  } as any);
+  } as any;
+  app.use('/sessions/:id/mcp-servers/:mcpId', sessionsMcpServersDeleteService);
+  app.service('/sessions/:id/mcp-servers/:mcpId').hooks({
+    before: {
+      remove: [
+        populateRouteParams,
+        requireAuth,
+        requireMinimumRole('member', 'modify session MCP servers'),
+      ],
+      patch: [
+        populateRouteParams,
+        requireAuth,
+        requireMinimumRole('member', 'modify session MCP servers'),
+      ],
+    },
+  });
 
   // Note: /sessions service is registered earlier (after custom endpoints but before hooks)
   // Note: Sessions are no longer directly on boards (worktree-only architecture).
